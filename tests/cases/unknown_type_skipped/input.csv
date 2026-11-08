@@ -1,0 +1,3 @@
+type,client,tx,amount
+bogus,1,1,1
+deposit,1,2,5

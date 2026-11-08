@@ -1,0 +1,1 @@
+LN 2: Error parsing event: CSV deserialize error: record 1 (line: 2, byte: 22): unknown variant `bogus`, expected one of `deposit`, `withdrawal`, `dispute`, `resolve`, `chargeback`

@@ -1,10 +1,14 @@
 use std::process::ExitCode;
 
 use clap::Parser;
-use csv::Writer;
 use thiserror::Error;
 
-use crate::{engine::Engine, event::RawEvent, storage::Storage};
+use crate::{
+    client::{AccountingError, ClientRow},
+    engine::Engine,
+    event::RawEvent,
+    storage::Storage,
+};
 
 mod client;
 mod engine;
@@ -23,6 +27,8 @@ enum RunError {
     Csv(#[from] csv::Error),
     #[error("IO Error {0}")]
     Io(#[from] std::io::Error),
+    #[error("Accounting error: {0}")]
+    Accounting(#[from] AccountingError),
 }
 
 fn main() -> ExitCode {
@@ -69,9 +75,13 @@ fn run() -> Result<(), RunError> {
         }
     }
 
-    let mut writer = Writer::from_writer(std::io::stdout());
-    for client in storage.get_clients().values() {
-        writer.serialize(client)?;
+    // Header written once, before any row, even when no account was ever created.
+    let mut writer = csv::WriterBuilder::new()
+        .has_headers(false)
+        .from_writer(std::io::stdout());
+    writer.write_record(["client", "available", "held", "total", "locked"])?;
+    for (client_id, account) in storage.sorted_clients() {
+        writer.serialize(ClientRow::new(client_id, account)?)?;
     }
     writer.flush()?;
 

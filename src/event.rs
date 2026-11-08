@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use rust_decimal::Decimal;
 use serde::Deserialize;
 use thiserror::Error;
@@ -24,7 +26,7 @@ pub struct RawEvent {
     #[serde(rename = "type")]
     pub event_type: EventType,
     pub client: ClientId,
-    pub amount: Option<Decimal>,
+    pub amount: Option<String>,
 }
 
 #[derive(Error, Debug)]
@@ -37,6 +39,8 @@ pub enum EventError {
     TooPrecise,
     #[error("Transaction should include an amount")]
     MissingAmount,
+    #[error("Amount {0} is not a decimal number")]
+    MalformedAmount(String),
 }
 
 pub enum Event {
@@ -100,8 +104,11 @@ impl TryFrom<RawEvent> for Event {
     }
 }
 
-fn parse_amount(amount: Option<Decimal>) -> Result<Decimal, EventError> {
-    let amount = amount.ok_or(EventError::MissingAmount)?;
+fn parse_amount(raw: Option<String>) -> Result<Decimal, EventError> {
+    let raw = raw.ok_or(EventError::MissingAmount)?;
+    // Parsed from the field text, never through a float: `Decimal` keeps the exact
+    // value and the written scale, and accepts the full range up to `Decimal::MAX`.
+    let amount = Decimal::from_str(&raw).map_err(|_| EventError::MalformedAmount(raw))?;
     if amount.is_sign_negative() {
         return Err(EventError::NegativeAmount);
     }
@@ -112,4 +119,113 @@ fn parse_amount(amount: Option<Decimal>) -> Result<Decimal, EventError> {
         return Err(EventError::ZeroAmount);
     }
     Ok(amount)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    fn d(text: &str) -> Decimal {
+        Decimal::from_str(text).unwrap()
+    }
+
+    fn raw(event_type: EventType, amount: Option<&str>) -> RawEvent {
+        RawEvent {
+            tx: 1,
+            event_type,
+            client: 1,
+            amount: amount.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn every_event_type_parses() {
+        let cases = [
+            (EventType::Deposit, Some("2.5")),
+            (EventType::Withdraw, Some("2.5")),
+            (EventType::Dispute, None),
+            (EventType::Resolve, None),
+            (EventType::ChargeBack, None),
+        ];
+        for (event_type, amount) in cases {
+            assert!(Event::try_from(raw(event_type, amount)).is_ok());
+        }
+    }
+
+    #[test]
+    fn deposit_keeps_the_amount() {
+        let event = Event::try_from(raw(EventType::Deposit, Some("2.5"))).unwrap();
+        assert!(matches!(event, Event::Deposit { amount, .. } if amount == d("2.5")));
+    }
+
+    #[test]
+    fn deposit_without_an_amount_is_refused() {
+        assert!(matches!(
+            Event::try_from(raw(EventType::Deposit, None)),
+            Err(EventError::MissingAmount)
+        ));
+    }
+
+    #[test]
+    fn withdrawal_without_an_amount_is_refused() {
+        assert!(matches!(
+            Event::try_from(raw(EventType::Withdraw, None)),
+            Err(EventError::MissingAmount)
+        ));
+    }
+
+    #[test]
+    fn zero_amount_is_refused() {
+        assert!(matches!(
+            Event::try_from(raw(EventType::Deposit, Some("0.0000"))),
+            Err(EventError::ZeroAmount)
+        ));
+    }
+
+    #[test]
+    fn negative_amount_is_refused() {
+        assert!(matches!(
+            Event::try_from(raw(EventType::Deposit, Some("-1"))),
+            Err(EventError::NegativeAmount)
+        ));
+    }
+
+    #[test]
+    fn five_decimals_are_refused() {
+        assert!(matches!(
+            Event::try_from(raw(EventType::Deposit, Some("1.00005"))),
+            Err(EventError::TooPrecise)
+        ));
+    }
+
+    #[test]
+    fn six_decimals_of_trailing_zeros_are_accepted() {
+        let event = Event::try_from(raw(EventType::Deposit, Some("1.000000"))).unwrap();
+        assert!(matches!(event, Event::Deposit { amount, .. } if amount.scale() == 6));
+    }
+
+    #[test]
+    fn four_decimals_are_accepted() {
+        let event = Event::try_from(raw(EventType::Deposit, Some("1.2345"))).unwrap();
+        assert!(matches!(event, Event::Deposit { amount, .. } if amount == d("1.2345")));
+    }
+
+    #[test]
+    fn non_numeric_amount_is_refused() {
+        assert!(matches!(
+            Event::try_from(raw(EventType::Deposit, Some("abc"))),
+            Err(EventError::MalformedAmount(_))
+        ));
+    }
+
+    #[test]
+    fn full_width_amount_is_accepted() {
+        let event = Event::try_from(raw(
+            EventType::Deposit,
+            Some("79228162514264337593543950335"),
+        ))
+        .unwrap();
+        assert!(matches!(event, Event::Deposit { amount, .. } if amount == Decimal::MAX));
+    }
 }

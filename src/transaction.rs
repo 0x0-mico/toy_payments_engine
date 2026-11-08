@@ -113,3 +113,135 @@ impl Tx {
         matches!(self.kind, TxKind::Deposit(_)).ok_or(TransactionError::WrongTxTypeToDispute)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    fn d(text: &str) -> Decimal {
+        Decimal::from_str(text).unwrap()
+    }
+
+    fn disputed_deposit() -> Tx {
+        let mut tx = Tx::new_deposit_tx(1, d("10"));
+        tx.open_dispute(&1).unwrap();
+        tx
+    }
+
+    #[test]
+    fn deposit_keeps_its_amount() {
+        assert_eq!(Tx::new_deposit_tx(1, d("2.5")).amount(), d("2.5"));
+    }
+
+    #[test]
+    fn withdrawal_keeps_its_amount() {
+        assert_eq!(Tx::new_withdraw_tx(1, d("2.5")).amount(), d("2.5"));
+    }
+
+    #[test]
+    fn open_dispute_on_a_deposit_returns_its_amount() {
+        let mut tx = Tx::new_deposit_tx(1, d("10"));
+        assert_eq!(tx.open_dispute(&1).unwrap(), d("10"));
+        assert!(matches!(tx.dispute(), Some(Dispute::Open)));
+    }
+
+    #[test]
+    fn open_dispute_on_a_withdrawal_is_refused() {
+        let mut tx = Tx::new_withdraw_tx(1, d("10"));
+        assert!(matches!(
+            tx.open_dispute(&1),
+            Err(TransactionError::WrongTxTypeToDispute)
+        ));
+        assert!(tx.dispute().is_none());
+    }
+
+    #[test]
+    fn open_dispute_by_a_foreign_client_is_refused() {
+        let mut tx = Tx::new_deposit_tx(1, d("10"));
+        assert!(matches!(
+            tx.open_dispute(&2),
+            Err(TransactionError::WrongClient(2))
+        ));
+    }
+
+    #[test]
+    fn open_dispute_twice_is_refused() {
+        let mut tx = disputed_deposit();
+        assert!(matches!(
+            tx.open_dispute(&1),
+            Err(TransactionError::TxAlreadyDisputed)
+        ));
+    }
+
+    #[test]
+    fn open_dispute_after_chargeback_is_refused() {
+        let mut tx = disputed_deposit();
+        tx.chargeback_on_dispute(&1).unwrap();
+        assert!(matches!(
+            tx.open_dispute(&1),
+            Err(TransactionError::TxAlreadyChargedBack)
+        ));
+    }
+
+    #[test]
+    fn resolve_clears_an_open_dispute() {
+        let mut tx = disputed_deposit();
+        tx.resolve_dispute(&1).unwrap();
+        assert!(tx.dispute().is_none());
+    }
+
+    #[test]
+    fn resolve_without_a_dispute_is_refused() {
+        let mut tx = Tx::new_deposit_tx(1, d("10"));
+        assert!(matches!(
+            tx.resolve_dispute(&1),
+            Err(TransactionError::TxNotDisputed)
+        ));
+    }
+
+    #[test]
+    fn resolve_after_chargeback_is_refused() {
+        let mut tx = disputed_deposit();
+        tx.chargeback_on_dispute(&1).unwrap();
+        assert!(matches!(
+            tx.resolve_dispute(&1),
+            Err(TransactionError::TxAlreadyChargedBack)
+        ));
+    }
+
+    #[test]
+    fn chargeback_closes_an_open_dispute() {
+        let mut tx = disputed_deposit();
+        tx.chargeback_on_dispute(&1).unwrap();
+        assert!(matches!(tx.dispute(), Some(Dispute::ChargedBack)));
+    }
+
+    #[test]
+    fn chargeback_twice_is_refused() {
+        let mut tx = disputed_deposit();
+        tx.chargeback_on_dispute(&1).unwrap();
+        assert!(matches!(
+            tx.chargeback_on_dispute(&1),
+            Err(TransactionError::TxAlreadyChargedBack)
+        ));
+    }
+
+    #[test]
+    fn chargeback_without_a_dispute_is_refused() {
+        let mut tx = Tx::new_deposit_tx(1, d("10"));
+        assert!(matches!(
+            tx.chargeback_on_dispute(&1),
+            Err(TransactionError::TxNotDisputed)
+        ));
+    }
+
+    #[test]
+    fn reset_dispute_restores_a_previous_state() {
+        let mut tx = disputed_deposit();
+        tx.reset_dispute(None);
+        assert!(tx.dispute().is_none());
+        tx.reset_dispute(Some(Dispute::ChargedBack));
+        assert!(matches!(tx.dispute(), Some(Dispute::ChargedBack)));
+    }
+}

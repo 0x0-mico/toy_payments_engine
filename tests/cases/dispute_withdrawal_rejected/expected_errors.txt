@@ -1,0 +1,1 @@
+LN 4: Error applying event: Transaction operation error: Wrong TX type to dispute. Only deposits can be disputed

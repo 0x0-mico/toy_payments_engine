@@ -1,0 +1,1 @@
+LN 6: Error applying event: Client operation error: Client lacks the funds for this operation

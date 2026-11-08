@@ -1,0 +1,1 @@
+LN 2: Error parsing event: Zero amount in transaction

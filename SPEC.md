@@ -113,6 +113,11 @@ struct Client {
 ```
 
 Any invalid transaction is reported to STDERR referencing line number and reason for rejection.
+A rejected row changes no account, keeps no transaction record, and does not stop the stream.
+
+Rows are written ordered by client ID, header first. The scale of every decimal follows the
+input: `2` and `2.0` are the same amount and either may be printed. The challenge treats
+formatting of round values as irrelevant, so no scale is imposed on output.
 
 Program terminates with either status code 0 (success) or 1 (io fatal )
 
@@ -151,9 +156,13 @@ pub struct Client {
   is_locked: bool
 }
 
-impl Serialize for Client {
-  ...
-  total() = held + available
+// The wire row is a separate type. `total` exists here and nowhere else.
+pub struct ClientRow {
+  client: ClientId,
+  available: Decimal,
+  held: Decimal,
+  total: Decimal, // always available + held
+  locked: bool
 }
 
 pub struct Storage {
