@@ -15,7 +15,7 @@ pub enum EngineError {
     Transaction(#[from] TransactionError),
     #[error("Client operation error: {0}")]
     Client(#[from] ClientError),
-    #[error("Client operation error: {0}")]
+    #[error("Storage error: {0}")]
     Storage(#[from] StorageError),
 }
 
