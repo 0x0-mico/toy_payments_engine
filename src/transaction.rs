@@ -5,16 +5,19 @@ use crate::client::ClientId;
 
 pub type TxId = u32;
 
+#[derive(Clone)]
 pub enum TxKind {
     Deposit(Decimal),
     Withdraw(Decimal),
 }
 
+#[derive(Clone)]
 pub enum Dispute {
     Open,
     ChargedBack,
 }
 
+#[derive(Clone)]
 pub struct Tx {
     client: ClientId,
     kind: TxKind,
@@ -48,45 +51,42 @@ impl Tx {
             dispute: None,
         }
     }
-    pub fn dispute(&mut self, client_id: &ClientId) -> Result<Decimal, TransactionError> {
+    pub fn open_dispute(&mut self, client_id: &ClientId) -> Result<Decimal, TransactionError> {
         self.deny_if_wrong_client(client_id)?;
         if let Some(dispute) = &self.dispute {
             match dispute {
                 Dispute::Open => return Err(TransactionError::TxAlreadyDisputed),
                 Dispute::ChargedBack => return Err(TransactionError::TxAlreadyChargedBack),
             }
-        } else {
-            self.dispute = Some(Dispute::Open);
         }
+        self.dispute = Some(Dispute::Open);
         Ok(self.amount())
     }
-    pub fn resolve(&mut self, client_id: &ClientId) -> Result<Decimal, TransactionError> {
+    pub fn resolve_dispute(&mut self, client_id: &ClientId) -> Result<(), TransactionError> {
         self.deny_if_wrong_client(client_id)?;
-        if let Some(dispute) = &self.dispute {
-            match dispute {
+        match &self.dispute {
+            Some(dispute) => match dispute {
                 Dispute::Open => {
                     self.dispute = None;
+                    Ok(())
                 }
-                Dispute::ChargedBack => return Err(TransactionError::TxAlreadyChargedBack),
-            }
-        } else {
-            return Err(TransactionError::TxNotDisputed);
+                Dispute::ChargedBack => Err(TransactionError::TxAlreadyChargedBack),
+            },
+            _ => Err(TransactionError::TxNotDisputed),
         }
-        Ok(self.amount())
     }
-    pub fn chargeback(&mut self, client_id: &ClientId) -> Result<Decimal, TransactionError> {
+    pub fn chargeback_on_dispute(&mut self, client_id: &ClientId) -> Result<(), TransactionError> {
         self.deny_if_wrong_client(client_id)?;
-        if let Some(dispute) = &self.dispute {
-            match dispute {
+        match &self.dispute {
+            Some(dispute) => match dispute {
                 Dispute::Open => {
                     self.dispute = Some(Dispute::ChargedBack);
+                    Ok(())
                 }
-                Dispute::ChargedBack => return Err(TransactionError::TxAlreadyChargedBack),
-            }
-        } else {
-            return Err(TransactionError::TxNotDisputed);
+                Dispute::ChargedBack => Err(TransactionError::TxAlreadyChargedBack),
+            },
+            _ => Err(TransactionError::TxNotDisputed),
         }
-        Ok(self.amount())
     }
 
     pub fn amount(&self) -> Decimal {
@@ -99,5 +99,11 @@ impl Tx {
             return Err(TransactionError::WrongClient(*client_id));
         }
         Ok(())
+    }
+    pub fn dispute(&self) -> &Option<Dispute> {
+        &self.dispute
+    }
+    pub fn reset_dispute(&mut self, dispute: Option<Dispute>) {
+        self.dispute = dispute
     }
 }
