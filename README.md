@@ -69,22 +69,28 @@ chargeback accounting still applies.
 
 ## Correctness
 
-- Every module is unit tested: balance guards and fund movement in
-  `client`, the dispute state machine in `transaction`, tx-id uniqueness
-  and account lookup in `storage`, row and amount validation in `event`,
-  and event application in `engine`.
-- The 39 integration cases run the compiled binary and compare stdout,
-  stderr and exit status against hand-written expectations.
-- The exit-status contract has its own cases, including usage errors.
-- The 1.36M-row stress dataset embeds every failure mode of the smaller
-  cases and is verified against a closed form.
+- Every module has unit tests for the complicated bits: balance guards
+  and fund movement, the dispute state machine, transaction-ID
+  uniqueness, row and amount validation, and event application.
+- The type system carries part of the load: a typed `Event` enum matched
+  exhaustively, `Decimal` instead of floats, typed errors, and client's
+  `total` balance amount derived rather than stored.
+- The 39 integration cases run the compiled program end to end against
+  expectations written from the specification by hand, including the
+  sample from the specification itself. A failure always means the code
+  or the expectation is wrong; an expectation can never copy a bug from
+  the program.
+- The exit-status contract (0 on success, 1 on fatal IO, 2 on a bad
+  invocation) has its own cases.
+- The 1.36M-row stress dataset covers every failure mode of the smaller
+  cases, and its expected result is computed without the engine, so the
+  check cannot repeat the engine's own bugs.
 - A rejected event changes no account, stores no transaction, and never
-  stops the stream; multi-step events leave no half-applied state.
-- The invariant `total = available + held` holds on every emitted row and
-  is asserted on every row of the stress dataset.
-- Results were cross-checked against an independent re-implementation of
-  the specification: the sample from the specification and the stress
-  dataset agree exactly.
+  stops the stream; a multi-step event applies fully or not at all. The
+  rule `total = available + held` holds on every emitted row.
+- The results were also checked against a separate program written from
+  the specification alone: the sample from the specification and the
+  stress dataset agree exactly.
 
 ## Safety and robustness
 
@@ -103,6 +109,11 @@ chargeback accounting still applies.
   (29.8 MB, every failure mode included) processes in 2.8 s with a peak RSS
   of 24.6 MiB (release build; debug: 6.3 s, 25.7 MiB). Generator:
   `scripts/generate_stress.py`.
+- Bundled in a server: streams are independent and no event crosses
+  clients, so the engine scales by instantiation. One engine and store per
+  stream, or sharded by client ID — with no shared state to lock. A single
+  shared store would need sharding by client ID to avoid serializing on one
+  lock; the two layouts were not benchmarked.
 
 ## Maintainability
 
