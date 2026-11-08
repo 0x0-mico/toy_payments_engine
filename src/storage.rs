@@ -33,7 +33,6 @@ impl Storage {
             .entry(client)
             .or_insert_with(|| Client::new(amount));
     }
-    /// Accounts ordered by client ID, so the output file is byte-identical between runs.
     pub fn sorted_clients(&self) -> Vec<(ClientId, &Client)> {
         let mut rows: Vec<(ClientId, &Client)> = self
             .clients

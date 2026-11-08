@@ -75,7 +75,6 @@ fn run() -> Result<(), RunError> {
         }
     }
 
-    // Header written once, before any row, even when no account was ever created.
     let mut writer = csv::WriterBuilder::new()
         .has_headers(false)
         .from_writer(std::io::stdout());

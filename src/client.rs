@@ -10,7 +10,6 @@ pub struct Client {
     is_locked: bool,
 }
 
-/// Wire form of an account row. `total` exists here and nowhere else.
 #[derive(Debug, Serialize)]
 pub struct ClientRow {
     pub client: ClientId,

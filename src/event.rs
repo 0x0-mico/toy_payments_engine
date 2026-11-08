@@ -106,8 +106,6 @@ impl TryFrom<RawEvent> for Event {
 
 fn parse_amount(raw: Option<String>) -> Result<Decimal, EventError> {
     let raw = raw.ok_or(EventError::MissingAmount)?;
-    // Parsed from the field text, never through a float: `Decimal` keeps the exact
-    // value and the written scale, and accepts the full range up to `Decimal::MAX`.
     let amount = Decimal::from_str(&raw).map_err(|_| EventError::MalformedAmount(raw))?;
     if amount.is_sign_negative() {
         return Err(EventError::NegativeAmount);
