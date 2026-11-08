@@ -1,6 +1,6 @@
 use crate::{
-    client::ClientId,
-    storage::Storage,
+    client::{ClientError, ClientId},
+    storage::{AmountError, Storage},
     transaction::{Event, TxId},
 };
 use thiserror::Error;
@@ -15,12 +15,6 @@ pub enum EngineError {
     TxIdUnknown(TxId),
     #[error("Client ID {0} not known")]
     ClientIdUnknown(ClientId),
-    #[error("Client ID {0} account is locked")]
-    ClientIsLocked(ClientId),
-    #[error("Client lacks the funds for this operation")]
-    NotEnoughFunds,
-    #[error("Operation would overflow the client's balance")]
-    BalanceOverflow,
     #[error("Transaction {0} is not disputed")]
     TxNotDisputed(TxId),
     #[error("Transaction {0} is already disputed")]
@@ -29,13 +23,36 @@ pub enum EngineError {
     TxAlreadyChargedBack(TxId),
     #[error("Client {client} not allowed to dispute transaction {tx_id}")]
     DisputeByWrongClient { client: ClientId, tx_id: TxId },
+    #[error("Client operation error: {0}")]
+    ClientError(#[from] ClientError),
 }
 
 impl Engine {
-    pub fn new() -> Self {
-        Self {}
-    }
     pub fn apply_event(ev: Event, storage: &mut Storage) -> Result<(), EngineError> {
+        match ev {
+            Event::Deposit { client, tx, amount } => {
+                reject_reused_tx_id(storage, &tx)?;
+                if let Some(client) = storage.get_client(&client) {
+                    if client.is_locked() {
+                        return Err(EngineError::ClientIsLocked(client));
+                    }
+                    storage.credit_client()?;
+                } else {
+                    storage.init_client(client, amount);
+                }
+            }
+            Event::Withdraw { client, tx, amount } => {}
+            Event::Dispute { client, tx } => {}
+            Event::Resolve { client, tx } => {}
+            Event::ChargeBack { client, tx } => {}
+        }
+
         Ok(())
     }
+}
+
+fn reject_reused_tx_id(storage: &Storage, tx_id: &TxId) -> Result<(), EngineError> {
+    storage
+        .is_unknown_tx(tx_id)
+        .ok_or(EngineError::TxIdAlreadyUsed(*tx_id))
 }
