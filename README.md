@@ -80,8 +80,8 @@ chargeback accounting still applies.
   sample from the specification itself. A failure always means the code
   or the expectation is wrong; an expectation can never copy a bug from
   the program.
-- The exit-status contract (0 on success, 1 on fatal IO, 2 on a bad
-  invocation) has its own cases.
+- The exit-status (0 on success, 1 on fatal IO, 2 on a bad
+  invocation) has its own test cases.
 - The 1.36M-row stress dataset covers every failure mode of the smaller
   cases, and its expected result is computed without the engine, so the
   check cannot repeat the engine's own bugs.
@@ -109,11 +109,11 @@ chargeback accounting still applies.
   (29.8 MB, every failure mode included) processes in 2.8 s with a peak RSS
   of 24.6 MiB (release build; debug: 6.3 s, 25.7 MiB). Generator:
   `scripts/generate_stress.py`.
-- Bundled in a server: streams are independent and no event crosses
+- Bundling on a server: event streams would be independent as no event crosses
   clients, so the engine scales by instantiation. One engine and store per
-  stream, or sharded by client ID — with no shared state to lock. A single
+  stream, or sharded by client ID with no shared state to lock. A single
   shared store would need sharding by client ID to avoid serializing on one
-  lock; the two layouts were not benchmarked.
+  lock.
 
 ## Maintainability
 
