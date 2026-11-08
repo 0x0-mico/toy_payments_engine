@@ -31,8 +31,6 @@ pub enum AccountingError {
     #[error("Operation would overflow available balance")]
     AvailableOverflow,
 
-    #[error("Operation would underflow total balance")]
-    TotalUnderflow,
     #[error("Operation would underflow held balance")]
     HeldUnderflow,
     #[error("Operation would underflow available balance")]
@@ -50,9 +48,6 @@ impl Client {
     }
     fn lock(&mut self) {
         self.is_locked = true;
-    }
-    pub fn is_locked(&self) -> &bool {
-        &self.is_locked
     }
     fn set_total(&mut self) -> Result<(), ClientError> {
         self.available = self
@@ -86,14 +81,14 @@ impl Client {
         self.set_total()?;
         Ok(())
     }
-    pub fn dispute(&mut self, amount: Decimal) -> Result<(), ClientError> {
+    pub fn put_to_held(&mut self, amount: Decimal) -> Result<(), ClientError> {
         self.held = self
             .held
             .checked_add(amount)
             .ok_or(AccountingError::HeldOverflow)?;
         Ok(())
     }
-    pub fn chargeback(&mut self, amount: Decimal) -> Result<(), ClientError> {
+    pub fn apply_chargeback(&mut self, amount: Decimal) -> Result<(), ClientError> {
         self.lock();
         self.held
             .checked_sub(amount)
@@ -101,7 +96,7 @@ impl Client {
         self.set_total()?;
         Ok(())
     }
-    pub fn resolve(&mut self, amount: Decimal) -> Result<(), ClientError> {
+    pub fn resolve_held(&mut self, amount: Decimal) -> Result<(), ClientError> {
         self.available
             .checked_add(amount)
             .ok_or(AccountingError::AvailableOverflow)?;

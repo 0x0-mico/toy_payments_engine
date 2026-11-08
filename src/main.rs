@@ -4,10 +4,11 @@ use clap::Parser;
 use csv::Writer;
 use thiserror::Error;
 
-use crate::{engine::Engine, storage::Storage, transaction::RawEvent};
+use crate::{engine::Engine, event::RawEvent, storage::Storage};
 
 mod client;
 mod engine;
+mod event;
 mod storage;
 mod transaction;
 
@@ -59,7 +60,7 @@ fn run() -> Result<(), RunError> {
     }
 
     let mut writer = Writer::from_writer(std::io::stdout());
-    for client in storage.get_accounts().values() {
+    for client in storage.get_clients().values() {
         writer.serialize(client)?;
     }
     writer.flush()?;

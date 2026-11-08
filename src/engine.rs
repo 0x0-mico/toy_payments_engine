@@ -1,8 +1,10 @@
 use crate::{
     client::{ClientError, ClientId},
-    storage::{AmountError, Storage},
-    transaction::{Event, TxId},
+    event::Event,
+    storage::Storage,
+    transaction::{TransactionError, Tx, TxId},
 };
+use rust_decimal::Decimal;
 use thiserror::Error;
 
 pub struct Engine;
@@ -15,14 +17,8 @@ pub enum EngineError {
     TxIdUnknown(TxId),
     #[error("Client ID {0} not known")]
     ClientIdUnknown(ClientId),
-    #[error("Transaction {0} is not disputed")]
-    TxNotDisputed(TxId),
-    #[error("Transaction {0} is already disputed")]
-    TxAlreadyDisputed(TxId),
-    #[error("Transaction {0} was already charged back")]
-    TxAlreadyChargedBack(TxId),
-    #[error("Client {client} not allowed to dispute transaction {tx_id}")]
-    DisputeByWrongClient { client: ClientId, tx_id: TxId },
+    #[error("Transaction operation error: {0}")]
+    TransactionError(#[from] TransactionError),
     #[error("Client operation error: {0}")]
     ClientError(#[from] ClientError),
 }
@@ -30,21 +26,66 @@ pub enum EngineError {
 impl Engine {
     pub fn apply_event(ev: Event, storage: &mut Storage) -> Result<(), EngineError> {
         match ev {
-            Event::Deposit { client, tx, amount } => {
-                reject_reused_tx_id(storage, &tx)?;
-                if let Some(client) = storage.get_client(&client) {
-                    if client.is_locked() {
-                        return Err(EngineError::ClientIsLocked(client));
-                    }
-                    storage.credit_client()?;
+            Event::Deposit {
+                client_id,
+                tx_id,
+                amount,
+            } => {
+                reject_reused_tx_id(storage, &tx_id)?;
+                if let Some(client) = storage.get_client_mut(&client_id) {
+                    client.credit(amount)?;
+                    storage.add_tx(tx_id, Tx::new_deposit_tx(client_id, amount));
                 } else {
-                    storage.init_client(client, amount);
+                    storage.init_client(client_id, amount);
                 }
             }
-            Event::Withdraw { client, tx, amount } => {}
-            Event::Dispute { client, tx } => {}
-            Event::Resolve { client, tx } => {}
-            Event::ChargeBack { client, tx } => {}
+            Event::Withdraw {
+                client_id,
+                tx_id,
+                amount,
+            } => {
+                reject_reused_tx_id(storage, &tx_id)?;
+                if let Some(client) = storage.get_client_mut(&client_id) {
+                    client.debit(amount)?;
+                    storage.add_tx(tx_id, Tx::new_withdraw_tx(client_id, amount));
+                } else {
+                    storage.init_client(client_id, Decimal::ZERO);
+                    return Err(EngineError::ClientIdUnknown(client_id));
+                }
+            }
+            Event::Dispute { client_id, tx_id } => {
+                if let Some(tx) = storage.get_tx_mut(tx_id) {
+                    let amount = tx.dispute(&client_id)?;
+                    let client = storage
+                        .get_client_mut(&client_id)
+                        .ok_or(EngineError::ClientIdUnknown(client_id))?;
+                    client.put_to_held(amount)?;
+                } else {
+                    return Err(EngineError::TxIdUnknown(tx_id));
+                }
+            }
+            Event::Resolve { client_id, tx_id } => {
+                if let Some(tx) = storage.get_tx_mut(tx_id) {
+                    let amount = tx.resolve(&client_id)?;
+                    let client = storage
+                        .get_client_mut(&client_id)
+                        .ok_or(EngineError::ClientIdUnknown(client_id))?;
+                    client.resolve_held(amount)?;
+                } else {
+                    return Err(EngineError::TxIdUnknown(tx_id));
+                }
+            }
+            Event::ChargeBack { client_id, tx_id } => {
+                if let Some(tx) = storage.get_tx_mut(tx_id) {
+                    let amount = tx.chargeback(&client_id)?;
+                    let client = storage
+                        .get_client_mut(&client_id)
+                        .ok_or(EngineError::ClientIdUnknown(client_id))?;
+                    client.apply_chargeback(amount)?;
+                } else {
+                    return Err(EngineError::TxIdUnknown(tx_id));
+                }
+            }
         }
 
         Ok(())

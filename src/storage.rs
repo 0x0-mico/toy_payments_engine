@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    client::{Client, ClientError, ClientId},
+    client::{Client, ClientId},
     transaction::{Tx, TxId},
 };
 
@@ -23,21 +23,16 @@ impl Storage {
     pub fn get_clients(&self) -> &HashMap<ClientId, Client> {
         &self.clients
     }
-    pub fn get_client(&self, client_id: &ClientId) -> Option<&Client> {
-        self.clients.get(client_id)
+    pub fn get_client_mut(&mut self, client_id: &ClientId) -> Option<&mut Client> {
+        self.clients.get_mut(client_id)
     }
     pub fn add_tx(&mut self, tx_id: TxId, tx: Tx) {
         self.transactions.insert(tx_id, tx);
     }
-    pub fn get_tx(&self, tx_id: TxId) -> Option<&Tx> {
-        self.transactions.get(&tx_id)
+    pub fn get_tx_mut(&mut self, tx_id: TxId) -> Option<&mut Tx> {
+        self.transactions.get_mut(&tx_id)
     }
     pub fn is_unknown_tx(&self, tx_id: &TxId) -> bool {
-        !self.transactions.contains_key(&tx_id)
+        !self.transactions.contains_key(tx_id)
     }
-    pub fn is_unknown_client(&self, client_id: &ClientId) -> bool {
-        !self.clients.contains_key(&client_id)
-    }
-    pub fn credit_client(&mut self, client: ClientId, amount: Decimal) -> Result<(), ClientError> {}
-    pub fn debit_client(&mut self, client: ClientId, amount: Decimal) -> Result<(), ClientError> {}
 }
