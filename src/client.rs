@@ -113,8 +113,6 @@ impl Client {
         Ok(())
     }
     pub fn apply_chargeback(&mut self, amount: Decimal) -> Result<(), ClientError> {
-        // Held is the sum of the open disputes, so it can reach zero but never
-        // below it. Available is the balance that is allowed to go negative.
         if amount > self.held {
             return Err(AccountingError::HeldUnderflow.into());
         }

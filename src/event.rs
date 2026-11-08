@@ -35,7 +35,7 @@ pub enum EventError {
     ZeroAmount,
     #[error("Negative amount in transaction")]
     NegativeAmount,
-    #[error("Amount in transaction should be prices up to the 4th decimal and no more")]
+    #[error("Amount in transaction should be precise up to the 4th decimal and no more")]
     TooPrecise,
     #[error("Transaction should include an amount")]
     MissingAmount,
