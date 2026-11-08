@@ -86,6 +86,10 @@ impl Client {
             .held
             .checked_add(amount)
             .ok_or(AccountingError::HeldOverflow)?;
+        self.available = self
+            .available
+            .checked_sub(amount)
+            .ok_or(AccountingError::AvailableUnderflow)?;
         self.set_total()?;
         Ok(())
     }

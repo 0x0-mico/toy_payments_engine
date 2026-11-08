@@ -110,6 +110,6 @@ impl Tx {
         Ok(())
     }
     pub fn deny_if_wrong_tx_type(&self) -> Result<(), TransactionError> {
-        (!matches!(self.kind, TxKind::Deposit(_))).ok_or(TransactionError::WrongTxTypeToDispute)
+        matches!(self.kind, TxKind::Deposit(_)).ok_or(TransactionError::WrongTxTypeToDispute)
     }
 }
