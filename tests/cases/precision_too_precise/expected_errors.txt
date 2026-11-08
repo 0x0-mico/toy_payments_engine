@@ -1,1 +1,1 @@
-LN 2: Error parsing event: Amount in transaction should be prices up to the 4th decimal and no more
+LN 2: Error parsing event: Amount in transaction should be precise up to the 4th decimal and no more
