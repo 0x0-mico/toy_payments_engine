@@ -4,6 +4,7 @@ use crate::{
     storage::{Storage, StorageError},
     transaction::{TransactionError, Tx},
 };
+use rust_decimal::Decimal;
 use thiserror::Error;
 
 pub struct Engine;
@@ -47,7 +48,7 @@ impl Engine {
                     }
                     Err(e) => {
                         // special case - still create a new client account as per specification
-                        storage.init_client(client_id, amount);
+                        storage.init_client(client_id, Decimal::ZERO);
                         return Err(e.into());
                     }
                 }

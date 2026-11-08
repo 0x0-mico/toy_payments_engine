@@ -34,6 +34,8 @@ pub enum TransactionError {
     TxAlreadyChargedBack,
     #[error("Client {0} in the event is not the same as on the referenced transaction")]
     WrongClient(ClientId),
+    #[error("Wrong TX type to dispute. Only deposits can be disputed")]
+    WrongTxTypeToDispute,
 }
 
 impl Tx {
@@ -51,8 +53,15 @@ impl Tx {
             dispute: None,
         }
     }
+    pub fn dispute(&self) -> &Option<Dispute> {
+        &self.dispute
+    }
+    pub fn reset_dispute(&mut self, dispute: Option<Dispute>) {
+        self.dispute = dispute
+    }
     pub fn open_dispute(&mut self, client_id: &ClientId) -> Result<Decimal, TransactionError> {
         self.deny_if_wrong_client(client_id)?;
+        self.deny_if_wrong_tx_type()?;
         if let Some(dispute) = &self.dispute {
             match dispute {
                 Dispute::Open => return Err(TransactionError::TxAlreadyDisputed),
@@ -100,10 +109,7 @@ impl Tx {
         }
         Ok(())
     }
-    pub fn dispute(&self) -> &Option<Dispute> {
-        &self.dispute
-    }
-    pub fn reset_dispute(&mut self, dispute: Option<Dispute>) {
-        self.dispute = dispute
+    pub fn deny_if_wrong_tx_type(&self) -> Result<(), TransactionError> {
+        (!matches!(self.kind, TxKind::Deposit(_))).ok_or(TransactionError::WrongTxTypeToDispute)
     }
 }

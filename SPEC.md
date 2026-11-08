@@ -63,7 +63,8 @@ Represents the release of the `held` funds back to the client. This locks the cl
 #### Flow:
 
 1. We check validity of the transaction event.
-2. We mark the transaction as having no dispute anymore and change accounting by decreasing the `held` funds by the transaction's amount in client's account.
+2. We mark the transaction as having been charged back and decrease the `held` and `total` balances.
+3. Lock the account.
 
 ## Decisions
 
@@ -91,7 +92,7 @@ struct TxRow {
   type: TxEventType,
   client: u16,
   tx: u32,
-  amount: Decimal // valid up to 4 decimals
+  amount: Option<Decimal>
 }
 ```
 
@@ -103,6 +104,7 @@ The program outputs the state of the client accounts in a form of rows to STDOUT
 
 ```rust
 struct Client {
+  client: u16,
   available: Decimal,
   held: Decimal,
   total: Decimal,
@@ -157,7 +159,6 @@ impl Serialize for Client {
 pub struct Storage {
   accounts: HashMap<ClientId, Client>,
   transactions: HashMap<TxId, Tx>,
-  observed_ids: Vec<TxId> // hm - needed? to check against tx_ids of dispute related events
 }
 
 impl Storage {

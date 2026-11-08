@@ -50,7 +50,7 @@ impl Client {
         self.is_locked = true;
     }
     fn set_total(&mut self) -> Result<(), ClientError> {
-        self.available = self
+        self.total = self
             .available
             .checked_add(self.held)
             .ok_or(AccountingError::TotalOverflow)?;
@@ -86,21 +86,25 @@ impl Client {
             .held
             .checked_add(amount)
             .ok_or(AccountingError::HeldOverflow)?;
-        Ok(())
-    }
-    pub fn apply_chargeback(&mut self, amount: Decimal) -> Result<(), ClientError> {
-        self.lock();
-        self.held
-            .checked_sub(amount)
-            .ok_or(AccountingError::HeldUnderflow)?;
         self.set_total()?;
         Ok(())
     }
+    pub fn apply_chargeback(&mut self, amount: Decimal) -> Result<(), ClientError> {
+        self.held = self
+            .held
+            .checked_sub(amount)
+            .ok_or(AccountingError::HeldUnderflow)?;
+        self.set_total()?;
+        self.lock();
+        Ok(())
+    }
     pub fn resolve_held(&mut self, amount: Decimal) -> Result<(), ClientError> {
-        self.available
+        self.available = self
+            .available
             .checked_add(amount)
             .ok_or(AccountingError::AvailableOverflow)?;
-        self.held
+        self.held = self
+            .held
             .checked_sub(amount)
             .ok_or(AccountingError::HeldUnderflow)?;
         Ok(())

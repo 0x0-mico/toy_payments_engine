@@ -29,7 +29,9 @@ impl Storage {
         }
     }
     pub fn init_client(&mut self, client: ClientId, amount: rust_decimal::prelude::Decimal) {
-        self.clients.insert(client, Client::new(amount));
+        self.clients
+            .entry(client)
+            .or_insert_with(|| Client::new(amount));
     }
     pub fn get_clients(&self) -> &HashMap<ClientId, Client> {
         &self.clients

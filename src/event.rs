@@ -8,7 +8,7 @@ use crate::{client::ClientId, transaction::TxId};
 pub enum EventType {
     #[serde(rename = "deposit")]
     Deposit,
-    #[serde(rename = "withdraw")]
+    #[serde(rename = "withdrawal")]
     Withdraw,
     #[serde(rename = "dispute")]
     Dispute,
@@ -105,8 +105,7 @@ fn parse_amount(amount: Option<Decimal>) -> Result<Decimal, EventError> {
     if amount.is_sign_negative() {
         return Err(EventError::NegativeAmount);
     }
-    if amount.round_dp(4) != amount {
-        // TODO: not good yet. i would rather not round 0.00005 to 0.0001
+    if amount.normalize().scale() > 4 {
         return Err(EventError::TooPrecise);
     }
     if amount.eq(&Decimal::ZERO) {

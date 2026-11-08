@@ -44,17 +44,27 @@ fn run() -> Result<(), RunError> {
         .trim(csv::Trim::All)
         .from_path(args.csv_file_path)?;
 
-    for result in reader.deserialize() {
-        let raw: RawEvent = result?;
+    let mut rows = reader.deserialize::<RawEvent>();
+    let mut line = rows.reader().position().line();
+    while let Some(result) = rows.next() {
+        let row_line = line;
+        line = rows.reader().position().line();
+        let raw: RawEvent = match result {
+            Ok(raw) => raw,
+            Err(e) => {
+                eprintln!("LN {row_line}: Error parsing event: {e}");
+                continue;
+            }
+        };
         let event = raw.try_into();
         match event {
             Ok(ev) => {
                 if let Err(err) = Engine::apply_event(ev, &mut storage) {
-                    eprintln!("{err}");
+                    eprintln!("LN {row_line}: Error applying event: {err}");
                 }
             }
             Err(e) => {
-                eprintln!("Error parsing event: {e}")
+                eprintln!("LN {row_line}: Error parsing event: {e}")
             }
         }
     }
