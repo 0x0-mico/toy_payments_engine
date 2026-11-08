@@ -2,7 +2,7 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::{client::ClientId, engine::EngineError};
+use crate::client::ClientId;
 
 pub type TxId = u32;
 
@@ -35,8 +35,6 @@ pub enum TxError {
     ZeroAmount,
     #[error("Negative amount in transaction")]
     NegativeAmount,
-    #[error("Amount is out of bounds")]
-    AmountOutOfBounds,
     #[error("Amount in transaction should be prices up to the 4th decimal and no more")]
     TooPrecise,
     #[error("Transaction should include an amount")]
@@ -49,7 +47,7 @@ pub enum Event {
         tx: TxId,
         amount: Decimal,
     },
-    Withdrawal {
+    Withdraw {
         client: ClientId,
         tx: TxId,
         amount: Decimal,
@@ -69,23 +67,53 @@ pub enum Event {
 }
 
 impl TryFrom<RawEvent> for Event {
-    type Error = EngineError;
-
+    type Error = TxError;
     fn try_from(value: RawEvent) -> Result<Self, TxError> {
         match value.event_type {
             EventType::Deposit => {
-                let amount = value.amount.ok_or(TxError::MissingAmount)?;
-                if amount.round_dp(4) != amount {
-                    return Err(TxError::TooPrecise);
-                }
+                let amount = parse_amount(value.amount)?;
                 Ok(Self::Deposit {
                     client: value.client,
                     tx: value.tx,
                     amount,
                 })
             }
+            EventType::Withdraw => {
+                let amount = parse_amount(value.amount)?;
+                Ok(Self::Withdraw {
+                    client: value.client,
+                    tx: value.tx,
+                    amount,
+                })
+            }
+            EventType::Dispute => Ok(Self::Dispute {
+                client: value.client,
+                tx: value.tx,
+            }),
+            EventType::Resolve => Ok(Self::Resolve {
+                client: value.client,
+                tx: value.tx,
+            }),
+            EventType::ChargeBack => Ok(Self::ChargeBack {
+                client: value.client,
+                tx: value.tx,
+            }),
         }
     }
+}
+
+fn parse_amount(amount: Option<Decimal>) -> Result<Decimal, TxError> {
+    let amount = amount.ok_or(TxError::MissingAmount)?;
+    if amount.is_sign_negative() {
+        return Err(TxError::NegativeAmount);
+    }
+    if amount.round_dp(4) != amount {
+        return Err(TxError::TooPrecise);
+    }
+    if amount.eq(&Decimal::ZERO) {
+        return Err(TxError::ZeroAmount);
+    }
+    Ok(amount)
 }
 
 pub enum MoneyTx {

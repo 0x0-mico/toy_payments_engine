@@ -4,11 +4,7 @@ use clap::Parser;
 use csv::Writer;
 use thiserror::Error;
 
-use crate::{
-    engine::Engine,
-    storage::Storage,
-    transaction::{Event, RawEvent},
-};
+use crate::{engine::Engine, storage::Storage, transaction::RawEvent};
 
 mod client;
 mod engine;
@@ -49,12 +45,15 @@ fn run() -> Result<(), RunError> {
 
     for result in reader.deserialize() {
         let raw: RawEvent = result?;
-        let event: Event = raw.try_into();
+        let event = raw.try_into();
         match event {
             Ok(ev) => {
-                if let Err(err) = Engine::apply_event(raw.into(), &mut storage) {
+                if let Err(err) = Engine::apply_event(ev, &mut storage) {
                     eprintln!("{err}");
                 }
+            }
+            Err(e) => {
+                eprintln!("Error parsing event: {e}")
             }
         }
     }
